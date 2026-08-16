@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import Footer from '../../components/student/Footer'
 import { assets } from '../../assets/assets'
 import CourseCard from '../../components/student/CourseCard';
