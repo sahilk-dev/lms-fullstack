@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Footer from '../../components/student/Footer';
 import { assets } from '../../assets/assets';
 import { useParams } from 'react-router-dom';
@@ -205,7 +205,7 @@ const CourseDetails = () => {
               {isAlreadyEnrolled ? "Already Enrolled" : "Enroll Now"}
             </button>
             <div className="pt-6">
-              <p className="md:text-xl text-lg font-medium text-gray-800">What's in the course?</p>
+              <p className="md:text-xl text-lg font-medium text-gray-800">What&apos;s in the course?</p>
               <ul className="ml-4 pt-2 text-sm md:text-default list-disc text-gray-500">
                 <li>Lifetime access with free updates.</li>
                 <li>Step-by-step, hands-on project guidance.</li>

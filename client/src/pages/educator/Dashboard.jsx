@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { assets } from '../../assets/assets'
 import { AppContext } from '../../context/AppContext';
 import axios from 'axios';
@@ -38,51 +38,6 @@ const Dashboard = () => {
     }
 
   }, [isEducator])
-
-  const studentsData = [
-    {
-      id: 1,
-      name: 'Richard Sanford',
-      profileImage: assets.profile_img,
-      courseTitle: 'Build Text to Image SaaS App in React JS',
-      date: '22 Aug, 2024'
-    },
-    {
-      id: 2,
-      name: 'Enrique Murphy',
-      profileImage: assets.profile_img2,
-      courseTitle: 'Build Text to Image SaaS App in React JS',
-      date: '22 Aug, 2024'
-    },
-    {
-      id: 3,
-      name: 'Alison Powell',
-      profileImage: assets.profile_img3,
-      courseTitle: 'Build Text to Image SaaS App in React JS',
-      date: '22 Aug, 2024'
-    },
-    {
-      id: 4,
-      name: 'Richard Sanford',
-      profileImage: assets.profile_img,
-      courseTitle: 'Build Text to Image SaaS App in React JS',
-      date: '22 Aug, 2024'
-    },
-    {
-      id: 5,
-      name: 'Enrique Murphy',
-      profileImage: assets.profile_img2,
-      courseTitle: 'Build Text to Image SaaS App in React JS',
-      date: '22 Aug, 2024'
-    },
-    {
-      id: 6,
-      name: 'Alison Powell',
-      profileImage: assets.profile_img3,
-      courseTitle: 'Build Text to Image SaaS App in React JS',
-      date: '22 Aug, 2024'
-    }
-  ];
 
 
   return dashboardData ? (
