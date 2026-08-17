@@ -35,7 +35,8 @@ const errorMiddleware = (err, req, res, next) => {
             statusCode === 500
                 ? 'Internal server error'
                 : err.message,
-            code: err.code || 'INTERNAL_ERROR'
+            code: err.code || 'INTERNAL_ERROR',
+            ...(err.details && { details: err.details })
     });
 };
 
