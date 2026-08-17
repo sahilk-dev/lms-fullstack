@@ -3,135 +3,303 @@ import User from "../models/User.js";
 import stripe from "stripe";
 import { Purchase } from "../models/Purchase.js";
 import Course from "../models/Course.js";
+import AppError from "../utils/AppError.js";
 
 
-
-// API Controller Function to Manage Clerk User with database
-export const clerkWebhooks = async (req, res) => {
+// Clerk Webhook
+export const clerkWebhooks = async (req, res, next) => {
   try {
+    const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
 
-    // Create a Svix instance with clerk webhook secret.
-    const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET)
-
-    // Verifying Headers
     await whook.verify(JSON.stringify(req.body), {
       "svix-id": req.headers["svix-id"],
       "svix-timestamp": req.headers["svix-timestamp"],
       "svix-signature": req.headers["svix-signature"]
-    })
+    });
 
-    // Getting Data from request body
-    const { data, type } = req.body
+    const { data, type } = req.body;
 
-    // Switch Cases for differernt Events
     switch (type) {
-      case 'user.created': {
-
+      case "user.created": {
         const userData = {
           _id: data.id,
           email: data.email_addresses[0].email_address,
-          name: data.first_name + " " + data.last_name,
+          name: `${data.first_name || ""} ${data.last_name || ""}`.trim(),
           imageUrl: data.image_url,
-          resume: ''
-        }
-        await User.create(userData)
-        res.json({})
+          resume: ""
+        };
+
+        await User.findOneAndUpdate(
+          { _id: data.id },
+          { $setOnInsert: userData },
+          {
+            upsert: true,
+            new: true
+          }
+        );
+
         break;
       }
 
-      case 'user.updated': {
+      case "user.updated": {
         const userData = {
           email: data.email_addresses[0].email_address,
-          name: data.first_name + " " + data.last_name,
-          imageUrl: data.image_url,
-        }
-        await User.findByIdAndUpdate(data.id, userData)
-        res.json({})
+          name: `${data.first_name || ""} ${data.last_name || ""}`.trim(),
+          imageUrl: data.image_url
+        };
+
+        await User.findByIdAndUpdate(data.id, userData);
+
         break;
       }
 
-      case 'user.deleted': {
-        await User.findByIdAndDelete(data.id)
-        res.json({})
+      case "user.deleted": {
+        await User.findByIdAndDelete(data.id);
+
         break;
       }
+
       default:
-        break;
+        console.log(`Unhandled Clerk event type: ${type}`);
     }
 
+    return res.status(200).json({
+      success: true,
+      received: true
+    });
+
   } catch (error) {
-    res.json({ success: false, message: error.message })
+    next(error);
   }
-}
+};
 
 
 // Stripe Gateway Initialize
-const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY)
+const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY);
 
 
-// Stripe Webhooks to Manage Payments Action
-export const stripeWebhooks = async (request, response) => {
-  const sig = request.headers['stripe-signature'];
+// Stripe Webhook
+export const stripeWebhooks = async (request, response, next) => {
+  const sig = request.headers["stripe-signature"];
 
   let event;
 
   try {
-    event = stripeInstance.webhooks.constructEvent(request.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripeInstance.webhooks.constructEvent(
+      request.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (error) {
+    return next(
+      new AppError(
+        "Webhook signature verification failed",
+        400,
+        "WEBHOOK_SIGNATURE_INVALID"
+      )
+    );
   }
-  catch (err) {
-    response.status(400).send(`Webhook Error: ${err.message}`);
-  }
 
-  // Handle the event
-  switch (event.type) {
-    case 'payment_intent.succeeded': {
+  try {
+    switch (event.type) {
+      case "payment_intent.succeeded": {
+        const paymentIntent = event.data.object;
+        const paymentIntentId = paymentIntent.id;
 
-      const paymentIntent = event.data.object;
-      const paymentIntentId = paymentIntent.id;
+        const session = await stripeInstance.checkout.sessions.list({
+          payment_intent: paymentIntentId,
+          limit: 1
+        });
 
-      // Getting Session Metadata
-      const session = await stripeInstance.checkout.sessions.list({
-        payment_intent: paymentIntentId,
-      });
+        if (!session.data.length) {
+          throw new AppError(
+            "Checkout session not found",
+            404,
+            "CHECKOUT_SESSION_NOT_FOUND"
+          );
+        }
 
-      const { purchaseId } = session.data[0].metadata;
+        const purchaseId = session.data[0].metadata?.purchaseId;
 
-      const purchaseData = await Purchase.findById(purchaseId)
-      const userData = await User.findById(purchaseData.userId)
-      const courseData = await Course.findById(purchaseData.courseId.toString())
+        if (!purchaseId) {
+          throw new AppError(
+            "Purchase ID missing from checkout session",
+            400,
+            "PURCHASE_ID_MISSING"
+          );
+        }
 
-      courseData.enrolledStudents.push(userData)
-      await courseData.save()
+        /*
+         * Only a pending purchase may transition to completed.
+         *
+         * This makes repeated Stripe deliveries safe:
+         *
+         * pending → completed
+         *
+         * completed → no change
+         */
+        const purchaseData = await Purchase.findOneAndUpdate(
+          {
+            _id: purchaseId,
+            status: "pending"
+          },
+          {
+            $set: {
+              status: "completed"
+            }
+          },
+          {
+            new: true
+          }
+        );
 
-      userData.enrolledCourses.push(courseData._id)
-      await userData.save()
+        if (!purchaseData) {
+          const existingPurchase = await Purchase.findById(purchaseId);
 
-      purchaseData.status = 'completed'
-      await purchaseData.save()
+          if (!existingPurchase) {
+            throw new AppError(
+              "Purchase not found",
+              404,
+              "PURCHASE_NOT_FOUND"
+            );
+          }
 
-      break;
+          if (existingPurchase.status === "completed") {
+            return response.status(200).json({
+              received: true,
+              duplicate: true
+            });
+          }
+
+          throw new AppError(
+            "Purchase cannot be completed from its current state",
+            409,
+            "INVALID_PURCHASE_STATE"
+          );
+        }
+
+        const userData = await User.findById(purchaseData.userId);
+
+        if (!userData) {
+          throw new AppError(
+            "User associated with purchase not found",
+            404,
+            "PURCHASE_USER_NOT_FOUND"
+          );
+        }
+
+        const courseData = await Course.findById(purchaseData.courseId);
+
+        if (!courseData) {
+          throw new AppError(
+            "Course associated with purchase not found",
+            404,
+            "PURCHASE_COURSE_NOT_FOUND"
+          );
+        }
+
+        /*
+         * $addToSet prevents duplicate enrollment if the same
+         * operation is attempted more than once.
+         */
+        await Course.findByIdAndUpdate(
+          courseData._id,
+          {
+            $addToSet: {
+              enrolledStudents: userData._id
+            }
+          }
+        );
+
+        await User.findByIdAndUpdate(
+          userData._id,
+          {
+            $addToSet: {
+              enrolledCourses: courseData._id
+            }
+          }
+        );
+
+        break;
+      }
+
+      case "payment_intent.payment_failed": {
+        const paymentIntent = event.data.object;
+        const paymentIntentId = paymentIntent.id;
+
+        const session = await stripeInstance.checkout.sessions.list({
+          payment_intent: paymentIntentId,
+          limit: 1
+        });
+
+        if (!session.data.length) {
+          throw new AppError(
+            "Checkout session not found",
+            404,
+            "CHECKOUT_SESSION_NOT_FOUND"
+          );
+        }
+
+        const purchaseId = session.data[0].metadata?.purchaseId;
+
+        if (!purchaseId) {
+          throw new AppError(
+            "Purchase ID missing from checkout session",
+            400,
+            "PURCHASE_ID_MISSING"
+          );
+        }
+
+        /*
+         * Only pending purchases may transition to failed.
+         *
+         * This prevents a later duplicate failure event from
+         * modifying an already completed purchase.
+         */
+        const purchaseData = await Purchase.findOneAndUpdate(
+          {
+            _id: purchaseId,
+            status: "pending"
+          },
+          {
+            $set: {
+              status: "failed"
+            }
+          },
+          {
+            new: true
+          }
+        );
+
+        if (!purchaseData) {
+          const existingPurchase = await Purchase.findById(purchaseId);
+
+          if (!existingPurchase) {
+            throw new AppError(
+              "Purchase not found",
+              404,
+              "PURCHASE_NOT_FOUND"
+            );
+          }
+
+          return response.status(200).json({
+            received: true,
+            duplicate: true
+          });
+        }
+
+        break;
+      }
+
+      default:
+        console.log(`Unhandled Stripe event type: ${event.type}`);
     }
-    case 'payment_intent.payment_failed': {
-      const paymentIntent = event.data.object;
-      const paymentIntentId = paymentIntent.id;
 
-      // Getting Session Metadata
-      const session = await stripeInstance.checkout.sessions.list({
-        payment_intent: paymentIntentId,
-      });
+    return response.status(200).json({
+      received: true
+    });
 
-      const { purchaseId } = session.data[0].metadata;
-
-      const purchaseData = await Purchase.findById(purchaseId)
-      purchaseData.status = 'failed'
-      await purchaseData.save()
-
-      break;
-    }
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+  } catch (error) {
+    next(error);
   }
-
-  // Return a response to acknowledge receipt of the event
-  response.json({ received: true });
-}
+};
