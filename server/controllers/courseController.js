@@ -1,8 +1,8 @@
 import Course from "../models/Course.js"
-
+import AppError from "../utils/AppError.js"
 
 // Get All Courses
-export const getAllCourse = async (req, res) => {
+export const getAllCourse = async (req, res, next) => {
     try {
 
         const courses = await Course.find({ isPublished: true })
@@ -12,20 +12,27 @@ export const getAllCourse = async (req, res) => {
         res.json({ success: true, courses })
 
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        next(error)
     }
-
 }
 
 // Get Course by Id
-export const getCourseId = async (req, res) => {
+export const getCourseId = async (req, res, next) => {
 
     const { id } = req.params
 
     try {
 
         const courseData = await Course.findById(id)
-            .populate({ path: 'educator'})
+            .populate({ path: 'educator' })
+
+        if (!courseData) {
+            throw new AppError(
+                'Course not found',
+                404,
+                'COURSE_NOT_FOUND'
+            )
+        }
 
         // Remove lectureUrl if isPreviewFree is false
         courseData.courseContent.forEach(chapter => {
@@ -39,7 +46,6 @@ export const getCourseId = async (req, res) => {
         res.json({ success: true, courseData })
 
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        next(error)
     }
-
-} 
+}
