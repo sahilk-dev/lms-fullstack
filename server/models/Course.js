@@ -23,7 +23,7 @@ const courseSchema = new mongoose.Schema({
     coursePrice: { type: Number, required: true },
     status: {
         type: String,
-        enum: ['DRAFT', 'PUBLISHED', 'ARCHIEVED'],
+        enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'],
         default: 'DRAFT',
     },
     isPublished: {
