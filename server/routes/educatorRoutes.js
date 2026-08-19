@@ -4,10 +4,19 @@ import {
     educatorDashboardData, 
     getEducatorCourses, 
     getEnrolledStudentsData, 
-    updateRoleToEducator 
+    updateRoleToEducator,
+    updateCourse,
+    publishCourse,
+    unpublishCourse,
+    archiveCourse
 } from '../controllers/educatorController.js';
-import upload from '../configs/multer.js';
+
+import validate from '../middlewares/validateMiddleware.js';
+import { courseIdParamsSchema, courseUpdateSchema } from '../validators/courseValidator.js';
+import { requireCourseOwnership } from '../middlewares/ownershipMiddleware.js';
 import { protectAuth, protectEducator } from '../middlewares/authMiddleware.js';
+
+import upload from '../configs/multer.js';
 
 
 const educatorRouter = express.Router()
@@ -20,6 +29,38 @@ educatorRouter.get('/update-role', updateRoleToEducator)
 
 // Educator-only routes
 educatorRouter.use(protectEducator)
+
+// Update course
+educatorRouter.put(
+    '/course/:id',
+    validate(courseIdParamsSchema, 'params'),
+    validate(courseUpdateSchema, 'body'),
+    requireCourseOwnership,
+    updateCourse
+)
+
+// Published course
+educatorRouter.patch(
+    '/courses/:id/publish',
+    validate(courseIdParamsSchema, 'params'),
+    requireCourseOwnership,
+    publishCourse
+)
+
+// Unpublished course
+educatorRouter.patch(
+    '/courses/:id/unpublish',
+    validate(courseIdParamsSchema, 'params'),
+    requireCourseOwnership,
+    unpublishCourse
+)
+// Archive course
+educatorRouter.delete(
+    '/courses/:id',
+    validate(courseIdParamsSchema, 'params'),
+    requireCourseOwnership,
+    archiveCourse
+)
 
 // Add Courses 
 educatorRouter.post(

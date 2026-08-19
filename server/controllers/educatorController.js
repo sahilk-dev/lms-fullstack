@@ -4,6 +4,7 @@ import { Purchase } from '../models/Purchase.js';
 import User from '../models/User.js';
 import { clerkClient } from '@clerk/express'
 import AppError from '../utils/AppError.js';
+import { success } from 'zod';
 
 // Update role to educator
 export const updateRoleToEducator = async (req, res, next) => {
@@ -54,6 +55,10 @@ export const addCourse = async (req, res, next) => {
         }
 
         parsedCourseData.educator = educatorId
+        parsedCourseData.status = 'DRAFT'
+        parsedCourseData.isPublished = false
+        parsedCourseData.publishedAt = null
+        parsedCourseData.archivedAt = null
 
         const newCourse = await Course.create(parsedCourseData)
 
@@ -172,5 +177,170 @@ export const getEnrolledStudentsData = async (req, res, next) => {
 
     } catch (error) {
         next(error)
+    }
+};
+
+// Update course
+export const updateCourse = async(req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const allowedUpdates = req.body;
+
+        const course = await Course.findByIdAndUpdate(
+            id,
+            {
+                $set: allowedUpdates
+            },
+            {
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!course) {
+            throw new AppError(
+                'Course not found',
+                404,
+                'COURSE_NOT-FOUND'
+            );
+        }
+
+        res.json({
+            success: true,
+            message: 'Course updated successfully',
+            course
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Publish course
+export const publishCourse = async(req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const course = await Course.findById(id);
+
+        if (!course) {
+            throw new AppError(
+                'Course not found',
+                404,
+                'COURSE_NOT_FOUND'
+            );
+        }
+
+        if (course.status === 'ARCHIEVED') {
+            throw new AppError(
+                'Archieved courses cannot be published',
+                409,
+                'COURSE_ARCHIEVED'
+            );
+        }
+
+        if (course.status === 'PUBLISHED') {
+            throw new AppError(
+                'Course is already published',
+                409,
+                'COURSE_ALREADY_PUBLISHED'
+            );
+        }
+
+        course.status = 'PUBLISHED';
+        course.isPublished = true;
+        course.publishedAt = new Date();
+        course.archivedAt = null;
+
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Course published successfully',
+            course
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Unpublish course
+export const unpublishCourse = async(req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const course = await Course.findById(id);
+
+        if (!course) {
+            throw new AppError(
+                'Course not found',
+                404,
+                'COURSE_NOT_FOUND'
+            );
+        }
+
+        if(course.status !== 'PUBLISHED') {
+            throw new AppError(
+                'Only published courses can be unpublished',
+                409,
+                'COURSE_NOT_PUBLISHED'
+            );
+        }
+
+        course.status = 'DRAFT';
+        course.isPublished = false;
+
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Course unpublished successfully',
+            course
+        });
+
+    } catch (error) {
+        next(error)
+    }
+};
+
+// Archive course
+export const archiveCourse = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const course = await Course.findById(id);
+
+        if (!course) {
+            throw new AppError(
+                'Course not found',
+                404,
+                'COURSE_NOT_FOUND'
+            );
+        }
+
+        if (course.status === 'ARCHIVED') {
+            throw new AppError(
+                'Course is already archived',
+                409,
+                'COURSE_ALREADY_ARCHIVED'
+            );
+        }
+
+        course.status = 'ARCHIVED';
+        course.isPublished = false;
+        course.archivedAt = new Date();
+
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Course archived successfully',
+            course
+        });
+
+    } catch (error) {
+        next(error);
     }
 };
