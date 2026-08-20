@@ -3,6 +3,7 @@ import { AppContext } from '../../context/AppContext';
 import axios from "axios";
 import { toast } from "react-toastify";
 import Loading from '../../components/student/Loading';
+import { useNavigate } from "react-router-dom";
 
 const statusStyles = {
   DRAFT: 'bg-yellow-100 text-yellow-700',
@@ -20,6 +21,7 @@ const MyCourses = () => {
 
   const [courses, setCourses] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const navigate = useNavigate();
 
   const fetchEducatorCourses = async () => {
     try {
@@ -260,6 +262,16 @@ const MyCourses = () => {
                         )}
 
                         {status !== 'ARCHIVED' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(`/educator/edit-course/${course._id}`)
+                            }
+                            className="px-3 py-1 rounded bg-blue-600 text-white text-xs"
+                          >
+                            Edit
+                          </button>
                           <button
                             type="button"
                             disabled={isLoading}
@@ -273,6 +285,7 @@ const MyCourses = () => {
                               ? 'Archiving...'
                               : 'Archive'}
                           </button>
+                        </>
                         )}
 
                         {status === 'ARCHIVED' && (
