@@ -153,7 +153,7 @@ const AddCourse = () => {
           ...lectureDetails,
           lectureDuration: Number(lectureDetails.lectureDuration),
           lectureOrder:
-            chapter.chapter.chapterContent.length > 0
+            chapter.chapterContent.length > 0
               ? chapter.chapterContent.at(-1).lectureOrder + 1
               : 1,
           lectureId: uniqid()
