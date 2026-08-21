@@ -1,3 +1,4 @@
+import fs from 'fs/promises';
 import { v2 as cloudinary } from 'cloudinary'
 import Course from '../models/Course.js';
 import { Purchase } from '../models/Purchase.js';
@@ -47,6 +48,7 @@ export const addCourse = async (req, res, next) => {
         try {
             parsedCourseData = JSON.parse(courseData)
         } catch {
+            await fs.unlink(imageFile.path).catch(() => {})
             throw new AppError(
                 'Invalid course data',
                 400,
@@ -54,19 +56,31 @@ export const addCourse = async (req, res, next) => {
             )
         }
 
+        let imageUpload
+
+        try {
+            imageUpload = await cloudinary.uploader.upload(imageFile.path)
+        } finally {
+            // temp file must go whether Cloudinary succeeded or not
+            await fs.unlink(imageFile.path).catch(() => {})
+        }
+
         parsedCourseData.educator = educatorId
         parsedCourseData.status = 'DRAFT'
         parsedCourseData.isPublished = false
         parsedCourseData.publishedAt = null
         parsedCourseData.archivedAt = null
+        parsedCourseData.courseThumbnail = imageUpload.secure_url
 
-        const newCourse = await Course.create(parsedCourseData)
+        let newCourse
 
-        const imageUpload = await cloudinary.uploader.upload(imageFile.path)
-
-        newCourse.courseThumbnail = imageUpload.secure_url
-
-        await newCourse.save()
+        try {
+            newCourse = await Course.create(parsedCourseData)
+        } catch (error) {
+            // roll back the orphaned Cloudinary asset
+            await cloudinary.uploader.destroy(imageUpload.public_id).catch(() => {})
+            throw error
+        }
 
         res.json({
             success: true,
@@ -344,3 +358,41 @@ export const archiveCourse = async (req, res, next) => {
         next(error);
     }
 };
+
+// Replace course thumbnail
+export const replaceCourseThumbnail = async (req, res, next) => {
+    try {
+        const imageFile = req.file
+
+        if (!imageFile) {
+            throw new AppError(
+                'Thumbnail not attached',
+                400,
+                'THUMBNAIL_REQUIRED'
+            )
+        }
+
+        let imageUpload
+
+        try {
+            imageUpload = await cloudinary.uploader.upload(imageFile.path)
+        } finally {
+            await fs.unlink(imageFile.path).catch(() => {})
+        }
+
+        const course = await Course.findByIdAndUpdate(
+            req.course._id,
+            { courseThumbnail: imageUpload.secure_url },
+            { new: true, runValidators: true }
+        )
+
+        res.json({
+            success: true,
+            message: 'Thumbnail updated',
+            courseThumbnail: course.courseThumbnail
+        })
+
+    } catch (error) {
+        next(error)
+    }
+}

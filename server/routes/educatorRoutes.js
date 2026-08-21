@@ -8,7 +8,8 @@ import {
     updateCourse,
     publishCourse,
     unpublishCourse,
-    archiveCourse
+    archiveCourse,
+    replaceCourseThumbnail
 } from '../controllers/educatorController.js';
 
 import validate from '../middlewares/validateMiddleware.js';
@@ -17,6 +18,7 @@ import { requireCourseOwnership } from '../middlewares/ownershipMiddleware.js';
 import { protectAuth, protectEducator } from '../middlewares/authMiddleware.js';
 
 import upload from '../configs/multer.js';
+import { handleUpload } from '../middlewares/uploadMiddleware.js';
 
 
 const educatorRouter = express.Router()
@@ -65,8 +67,17 @@ educatorRouter.delete(
 // Add Courses 
 educatorRouter.post(
     '/add-course', 
-    upload.single('image'), 
+    handleUpload(upload), 
     addCourse
+)
+
+// Replace course thumbnail
+educatorRouter.post(
+    '/courses/:id/thumbnail',
+    validate(courseIdParamsSchema, 'params'),
+    requireCourseOwnership,
+    handleUpload(upload),
+    replaceCourseThumbnail
 )
 
 // Get Educator Courses 
