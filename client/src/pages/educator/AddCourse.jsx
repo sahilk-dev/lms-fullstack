@@ -1,18 +1,37 @@
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { assets } from '../../assets/assets';
 import { toast } from 'react-toastify'
 import Quill from 'quill';
 import uniqid from 'uniqid';
 import axios from 'axios'
 import { AppContext } from '../../context/AppContext';
+import Loading from '../../components/student/Loading';
 
 const AddCourse = () => {
 
-  const editorRef = useRef(null);
+  const { id } = useParams();
+  const isEditMode = Boolean(id);
+
   const quillRef = useRef(null);
+  const pendingDescriptionRef = useRef(null);
+
+  const editorRef = (node) => {
+    if (node && !quillRef.current) {
+      quillRef.current = new Quill(node, {
+        theme: 'snow',
+      });
+
+      if (pendingDescriptionRef.current) {
+        quillRef.current.root.innerHTML = pendingDescriptionRef.current;
+        pendingDescriptionRef.current = null;
+      }
+    }
+  };
 
   const { backendUrl, getToken } = useContext(AppContext)
-
+  const [loadingCourse, setLoadingCourse] = useState(Boolean(id));
+  const [saving, setSaving] = useState(false);
   const [courseTitle, setCourseTitle] = useState('')
   const [coursePrice, setCoursePrice] = useState(0)
   const [discount, setDiscount] = useState(0)
@@ -26,6 +45,49 @@ const AddCourse = () => {
     lectureUrl: '',
     isPreviewFree: false,
   });
+
+  const fetchCourse = async () => {
+    try {
+      setLoadingCourse(true);
+
+      const token = await getToken();
+
+      const { data } = await axios.get(
+        `${backendUrl}/api/course/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!data.success) {
+        toast.error(data.message);
+        return;
+      }
+
+      const course = data.courseData;
+
+      setCourseTitle(course.courseTitle);
+      setCoursePrice(course.coursePrice);
+      setDiscount(course.discount);
+      setChapters(course.courseContent || []);
+
+      if (quillRef.current) {
+        quillRef.current.root.innerHTML =
+          course.courseDescription || '';
+      } else {
+        pendingDescriptionRef.current =
+          course.courseDescription || '';
+      }
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || error.message
+      );
+    } finally {
+      setLoadingCourse(false);
+    }
+  };
 
   const handleChapter = (action, chapterId) => {
     if (action === 'add') {
@@ -41,11 +103,20 @@ const AddCourse = () => {
         setChapters([...chapters, newChapter]);
       }
     } else if (action === 'remove') {
-      setChapters(chapters.filter((chapter) => chapter.chapterId !== chapterId));
+      setChapters(prev =>
+        prev.filter(
+          chapter => chapter.chapterId !== chapterId
+        )
+      );
     } else if (action === 'toggle') {
-      setChapters(
-        chapters.map((chapter) =>
-          chapter.chapterId === chapterId ? { ...chapter, collapsed: !chapter.collapsed } : chapter
+      setChapters(prev =>
+        prev.map(chapter =>
+          chapter.chapterId === chapterId
+            ? {
+                ...chapter,
+                collapsed: !chapter.collapsed
+            }
+          : chapter
         )
       );
     }
@@ -56,31 +127,48 @@ const AddCourse = () => {
       setCurrentChapterId(chapterId);
       setShowPopup(true);
     } else if (action === 'remove') {
-      setChapters(
-        chapters.map((chapter) => {
-          if (chapter.chapterId === chapterId) {
-            chapter.chapterContent.splice(lectureIndex, 1);
-          }
-          return chapter;
-        })
+      setChapters(prev =>
+        prev.map(chapter =>
+          chapter.chapterId === chapterId
+            ? {
+              ...chapter,
+              chapterContent: chapter.chapterContent.filter(
+                (_, index) => index !== lectureIndex
+              )
+            }
+          : chapter
+        )
       );
     }
   };
 
   const addLecture = () => {
-    setChapters(
-      chapters.map((chapter) => {
-        if (chapter.chapterId === currentChapterId) {
-          const newLecture = {
-            ...lectureDetails,
-            lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
-            lectureId: uniqid()
-          };
-          chapter.chapterContent.push(newLecture);
+    setChapters(prev =>
+      prev.map(chapter => {
+        if (chapter.chapterId !== currentChapterId) {
+          return chapter;
         }
-        return chapter;
+
+        const newLecture = {
+          ...lectureDetails,
+          lectureDuration: Number(lectureDetails.lectureDuration),
+          lectureOrder:
+            chapter.chapterContent.length > 0
+              ? chapter.chapterContent.at(-1).lectureOrder + 1
+              : 1,
+          lectureId: uniqid()
+        };
+
+        return {
+          ...chapter,
+          chapterContent: [
+            ...chapter.chapterContent,
+            newLecture
+          ]
+        };
       })
     );
+
     setShowPopup(false);
     setLectureDetails({
       lectureTitle: '',
@@ -91,65 +179,125 @@ const AddCourse = () => {
   };
 
   const handleSubmit = async (e) => {
-    try {
+  e.preventDefault();
 
-      e.preventDefault();
-
-      if (!image) {
-        toast.error('Thumbnail Not Selected')
-      }
-
-      const courseData = {
-        courseTitle,
-        courseDescription: quillRef.current.root.innerHTML,
-        coursePrice: Number(coursePrice),
-        discount: Number(discount),
-        courseContent: chapters,
-      }
-
-      const formData = new FormData()
-      formData.append('courseData', JSON.stringify(courseData))
-      formData.append('image', image)
-
-      const token = await getToken()
-
-      const { data } = await axios.post(backendUrl + '/api/educator/add-course', formData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-
-      if (data.success) {
-        toast.success(data.message)
-        setCourseTitle('')
-        setCoursePrice(0)
-        setDiscount(0)
-        setImage(null)
-        setChapters([])
-        quillRef.current.root.innerHTML = ""
-      } else (
-        toast.error(data.message)
-      )
-
-    } catch (error) {
-      toast.error(error.message)
+  try {
+    if (!isEditMode && !image) {
+      toast.error('Thumbnail Not Selected');
+      return;
     }
 
-  };
+    setSaving(true);
+
+    const courseData = {
+      courseTitle,
+      courseDescription: quillRef.current?.root.innerHTML || '',
+      coursePrice: Number(coursePrice),
+      discount: Number(discount),
+      courseContent: chapters,
+    };
+
+    const token = await getToken();
+
+    let data;
+
+    if (isEditMode) {
+      // ==========================================
+      // EDIT EXISTING COURSE
+      // ==========================================
+      const response = await axios.put(
+        `${backendUrl}/api/educator/course/${id}`,
+        courseData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      data = response.data;
+
+    } else {
+      // ==========================================
+      // CREATE NEW COURSE
+      // ==========================================
+      const formData = new FormData();
+
+      formData.append(
+        'courseData',
+        JSON.stringify(courseData)
+      );
+
+      formData.append('image', image);
+
+      const response = await axios.post(
+        `${backendUrl}/api/educator/add-course`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      data = response.data;
+    }
+
+    // ==========================================
+    // HANDLE RESPONSE
+    // ==========================================
+    if (data.success) {
+      toast.success(
+        isEditMode
+          ? 'Course updated successfully'
+          : 'Course created successfully'
+      );
+
+      if (!isEditMode) {
+        setCourseTitle('');
+        setCoursePrice(0);
+        setDiscount(0);
+        setImage(null);
+        setChapters([]);
+
+        if (quillRef.current) {
+          quillRef.current.root.innerHTML = '';
+        }
+      }
+    } else {
+      toast.error(data.message);
+    }
+
+  } catch (error) {
+    toast.error(
+      error.response?.data?.message ||
+      error.message ||
+      'Something went wrong'
+    );
+  } finally {
+    setSaving(false);
+  }
+};
 
   useEffect(() => {
-    // Initiate Quill only once
-    if (!quillRef.current && editorRef.current) {
-      quillRef.current = new Quill(editorRef.current, {
-        theme: 'snow',
-      });
+    if (isEditMode) {
+      fetchCourse();
     }
-  }, []);
+  }, [isEditMode, id]);
 
   useEffect(() => {
     console.log(chapters);
   }, [chapters]);
 
+  if (isEditMode && loadingCourse) {
+    return <Loading />
+  }
+
   return (
     <div className='h-screen overflow-scroll flex flex-col items-start justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0'>
+      <h2 className='text-xl font-semibold mb-4'>
+        {isEditMode ? 'Edit Course' : 'Create Course'}
+      </h2>
       <form onSubmit={handleSubmit} className='flex flex-col gap-4 max-w-md w-full text-gray-500'>
         <div className='flex flex-col gap-1'>
           <p>Course Title</p>
@@ -259,8 +407,16 @@ const AddCourse = () => {
           )}
         </div>
 
-        <button type="submit" className='bg-black text-white w-max py-2.5 px-8 rounded my-4'>
-          ADD
+        <button 
+          type="submit"
+          disabled={saving}
+          className='bg-black text-white w-max py-2.5 px-8 rounded my-4'
+        >
+          {saving
+            ? 'Saving...'
+            : isEditMode
+              ? 'SAVE CHANGES'
+              : 'SAVE DRAFT'}
         </button>
       </form>
     </div>

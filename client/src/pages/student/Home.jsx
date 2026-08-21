@@ -1,4 +1,3 @@
-import React from 'react';
 import Footer from '../../components/student/Footer';
 import Hero from '../../components/student/Hero';
 import Companies from '../../components/student/Companies';

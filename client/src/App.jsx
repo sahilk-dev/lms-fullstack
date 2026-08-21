@@ -1,5 +1,4 @@
-import React, { useContext } from 'react'
-import { Routes, Route, useLocation, useMatch } from 'react-router-dom'
+import { Routes, Route, useMatch } from 'react-router-dom'
 import Navbar from './components/student/Navbar'
 import Home from './pages/student/Home'
 import CourseDetails from './pages/student/CourseDetails'
@@ -36,6 +35,7 @@ const App = () => {
         <Route path='/educator' element={<Educator />}>
           <Route path='/educator' element={<Dashboard />} />
           <Route path='add-course' element={<AddCourse />} />
+          <Route path='edit-course/:id' element={<AddCourse />} />
           <Route path='my-courses' element={<MyCourses />} />
           <Route path='student-enrolled' element={<StudentsEnrolled />} />
         </Route>
