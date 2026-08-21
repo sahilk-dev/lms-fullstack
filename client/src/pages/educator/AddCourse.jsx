@@ -153,7 +153,7 @@ const AddCourse = () => {
           ...lectureDetails,
           lectureDuration: Number(lectureDetails.lectureDuration),
           lectureOrder:
-            chapter.chapter.chapterContent.length > 0
+            chapter.chapterContent.length > 0
               ? chapter.chapterContent.at(-1).lectureOrder + 1
               : 1,
           lectureId: uniqid()
@@ -202,9 +202,8 @@ const AddCourse = () => {
     let data;
 
     if (isEditMode) {
-      // ==========================================
+
       // EDIT EXISTING COURSE
-      // ==========================================
       const response = await axios.put(
         `${backendUrl}/api/educator/course/${id}`,
         courseData,
@@ -218,9 +217,8 @@ const AddCourse = () => {
       data = response.data;
 
     } else {
-      // ==========================================
+
       // CREATE NEW COURSE
-      // ==========================================
       const formData = new FormData();
 
       formData.append(
@@ -243,9 +241,7 @@ const AddCourse = () => {
       data = response.data;
     }
 
-    // ==========================================
     // HANDLE RESPONSE
-    // ==========================================
     if (data.success) {
       toast.success(
         isEditMode
