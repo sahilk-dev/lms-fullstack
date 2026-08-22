@@ -10,6 +10,7 @@ import connectCloudinary from './configs/cloudinary.js'
 import userRouter from './routes/userRoutes.js'
 import educatorRouter from './routes/educatorRoutes.js'
 import courseRouter from './routes/courseRoute.js'
+import progressRouter from './routes/progressRoutes.js'
 
 import { clerkMiddleware } from '@clerk/express'
 import { clerkWebhooks, stripeWebhooks } from './controllers/webhooks.js'
@@ -71,6 +72,7 @@ app.use('/api', apiLimiter)
 app.use('/api/educator', educatorRouter)
 app.use('/api/course', courseRouter)
 app.use('/api/user', userRouter)
+app.use('/api/progress', progressRouter)
 
 app.use((req, res, next) => {
   const error = new Error(
