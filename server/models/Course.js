@@ -25,6 +25,7 @@ const courseSchema = new mongoose.Schema({
         type: String,
         enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'],
         default: 'DRAFT',
+        index: true
     },
     isPublished: {
         type: Boolean,

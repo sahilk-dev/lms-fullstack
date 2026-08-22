@@ -5,15 +5,7 @@ import AppError from "../utils/AppError.js"
 export const getAllCourse = async (req, res, next) => {
     try {
 
-        const courses = await Course.find({
-            $or: [
-                { status: 'PUBLISHED' },
-                {
-                    status: { $exists: false },
-                    isPublished: true
-                }
-            ]
-        })
+        const courses = await Course.find({ status: 'PUBLISHED' })
             .select(['-courseContent', '-enrolledStudents'])
             .populate({ path: 'educator', select: '-password' })
 
