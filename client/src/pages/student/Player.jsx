@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import Rating from '../../components/student/Rating';
 import Footer from '../../components/student/Footer';
 import Loading from '../../components/student/Loading';
+import { getYouTubeId } from '../../utils/getYoutubeId';
 
 const Player = () => {
 
@@ -176,7 +177,10 @@ const Player = () => {
           playerData
             ? (
               <div>
-                <YouTube iframeClassName='w-full aspect-video' videoId={playerData.lectureUrl.split('/').pop()} />
+                {getYouTubeId(playerData.lectureUrl)
+                  ? <YouTube iframeClassName='w-full aspect-video' videoId= {getYouTubeId(playerData.lectureUrl)} />
+                  : <p className="text-red-500 p-4">No valid video available for this lecture.</p>
+                }
                 <div className='flex justify-between items-center mt-1'>
                   <p className='text-xl '>{playerData.chapter}.{playerData.lecture} {playerData.lectureTitle}</p>
                   <button onClick={() => markLectureAsCompleted(playerData.lectureId)} className='text-blue-600'>{progressData && progressData.lectureCompleted.includes(playerData.lectureId) ? 'Completed' : 'Mark Complete'}</button>
